@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="Coconect@Aluminium" uuid="c321625e-9000-4420-a4e5-2184d8d74870">
+    <data-source source="LOCAL" name="movies@192.168.1.8" uuid="4e83f891-f823-4476-b4bf-e0e180aca93a">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
-      <remarks>Movies for PostgreSQL database</remarks>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>
-      <jdbc-url>jdbc:postgresql://192.168.1.13:5432/coconect</jdbc-url>
+      <jdbc-url>jdbc:postgresql://192.168.1.8:5432/movies</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>
 </project>

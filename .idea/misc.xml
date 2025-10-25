@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="Black">
+    <option name="sdkName" value="Remote Python 3.12.3 (sftp://wthered@192.168.1.8:22/usr/bin/python3)" />
+  </component>
   <component name="JavaScriptSettings">
     <option name="languageLevel" value="ES6" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.6.9 (sftp://wthered@192.168.1.13:22/usr/bin/python)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.12.3 (sftp://wthered@192.168.1.8:22/home/wthered/sources/python/local_movies/venv/bin/python)" project-jdk-type="Python SDK" />
 </project>

@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="Aluminium" autoUploadExternalChanges="true">
+  <component name="PublishConfigData" autoUpload="Always" serverName="Bose" deleteMissingItems="true" confirmBeforeDeletion="false" autoUploadExternalChanges="true">
+    <option name="confirmBeforeDeletion" value="false" />
     <serverData>
-      <paths name="Aluminium">
+      <paths name="Bose">
         <serverdata>
           <mappings>
-            <mapping deploy="/postFilm" local="$PROJECT_DIR$" />
+            <mapping deploy="/local_movies" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Digital Ocean">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

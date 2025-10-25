@@ -1,36 +1,65 @@
-import mysql.connector as maria_database
+import time
 
-# connection = psy.connect(host="192.168.1.13", database="aluminium", user="ntina23gr", password="!p9lastiras")
-# cursor = connection.cursor()
-maria_connection = maria_database.connect(host='192.168.1.6', user='ntina23gr', password='!sm3llyc4t',
-                                          database='movies_pro')
-cursor = maria_connection.cursor()
-# tell postgres to use more work memory
-work_mem = 2048
+import requests
+
+from credentials import *
 
 
-def main():
-    # conn.cursor will return a cursor object, you can use this cursor to perform queries
-    print("Connected into Database!")
+def should_keep_line(line: str) -> bool:
+	"""
+	Defines the condition for keeping a line.
 
-    # execute our Query
-    cursor.execute("SELECT * FROM movies.credentials LIMIT 25")
+	If this function returns TRUE, the line is KEPT (not removed).
+	If this function returns FALSE, the line is REMOVED (not kept).
 
-    # retrieve the records from the database
-    records = cursor.fetchall()
+	*** CHANGE THE LOGIC BELOW TO MATCH YOUR CONDITION ***
+	"""
+	response = requests.get(line, headers=http_headers).json()
+	print("Keep line: {}".format('id' in response))
+	time.sleep(1)
 
-    for record_index in range(len(records)):
-        if record_index + 1 != records[record_index][0]:
-            # print(record_index + 1, "is not", records[record_index][0])
-            update_query = "UPDATE movies.userinfo SET user_id = %s WHERE user_id = %s;"
-            cursor.execute(update_query, [record_index + 1, records[record_index][0]])
-            empty = records[record_index][0] - (record_index + 1)
-            print(cursor.mogrify(update_query, [record_index + 1, records[record_index][0]]), empty, end='\r')
-            maria_connection.commit()
-        if record_index % 100 == 0:
-            print(record_index, "\t {0:.5f} %".format(100 * record_index / len(records)), end='\r')
+	# Default: Keep all other lines
+	return 'id' in response
+
+
+def filter_existing_file(filename: str):
+	"""
+	Reads the existing file, filters lines based on a condition, and overwrites the file.
+	"""
+	try:
+		# 1. READ ALL LINES INTO MEMORY
+		with open(filename, 'r') as f:
+			# We use readlines() to get a list of all lines
+			lines = f.readlines()
+
+		print(f"File '{filename}' read successfully. Total lines found: {len(lines)}")
+
+		# 2. FILTER THE LINES
+		# Create a new list containing only the lines that satisfy the should_keep_line condition
+		# The line will be kept if should_keep_line(line) returns True.
+		filtered_lines = [line for line in lines if should_keep_line(line)]
+
+		lines_removed = len(lines) - len(filtered_lines)
+
+		# Check if any changes were made before writing
+		if lines_removed == 0:
+			print("No lines matched the removal condition. File left unchanged.")
+			return
+
+		print(f"Filtering complete. Lines kept: {len(filtered_lines)}. Lines removed: {lines_removed}")
+
+		# 3. WRITE THE FILTERED LIST BACK TO THE FILE (Overwriting the original)
+		with open(filename, 'w') as f:
+			f.writelines(filtered_lines)
+
+		print(f"File '{filename}' has been successfully overwritten with filtered content.")
+
+	except FileNotFoundError:
+		print(f"Error: The file '{filename}' was not found. Please ensure it exists in the same directory.")
+	except Exception as e:
+		print(f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":
-    main()
-    print("Have updated some rows in table")
+	# Ensure you modify the should_keep_line function above with your actual condition
+	filter_existing_file('links_not_found.txt')

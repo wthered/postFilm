@@ -4,22 +4,16 @@ import urllib.error
 import urllib.request
 
 import pandas as pd
-import psycopg2 as psy
 
-conn = psy.connect(host="10.42.0.13", database="aluminium", user="ntina23gr", password="!p9lastiras")
-cur = conn.cursor()
+from database import Database
 
 
 def fetch(url):
 	try:
 		user_agent = 'Mozilla/4.0 (compatible; MSIE 5.01; Windows NT; Hotbar 4.1.8.0)'
-		req = urllib.request.Request(
-			url,
-			data=None,
-			headers={
-				'User-Agent': user_agent
-			}
-		)
+		req = urllib.request.Request(url, data=None, headers={
+			'User-Agent': user_agent
+		})
 
 		remote_data = urllib.request.urlopen(req)
 	# print(remote_data.read().decode('utf-8'))
@@ -43,33 +37,31 @@ def fetch(url):
 			return 0
 
 
-movie_ratings = pd.read_csv('/tmp/ml-latest/links.csv', header=None)
-for index, line in movie_ratings.iterrows():
-	# if len(line[:-1].split(',')) != 3:
-	# 	data = line[:-1].split(',')
-	# 	print("Line 57", data[0], "\t", data[1], "\t", data[2])
-	# 	break
-	# else:
-	# 	(title, imdb, movie) = line[:-1].split(',')
-
-	title = line[0]
-	imdb = str(round(int(line[1]))).zfill(7)
-	movie = line[2]
-
-	# print(title, imdb, movie)
-
-	if math.isnan(movie):
-		link = "https://api.themoviedb.org/3/find/tt" + imdb + "?api_key=1cd7d832933a3f8cb0c956ac70964e5f&language=en-US&external_source=imdb_id"
-
-		movie = fetch(link)
-		# print("Requesting", link)
-		print(movie)
-	else:
+def main():
+	movie_ratings = pd.read_csv('/tmp/ml-latest/links.csv', header=None)
+	for index, line in movie_ratings.iterrows():
+		title = line[0]
+		imdb = str(round(int(line[1]))).zfill(7)
 		movie = line[2]
 
-	links_query = "INSERT INTO movies.links values (%s,%s,%s) ON CONFLICT (title_id) DO NOTHING;"
-	cur.execute(links_query, [title, imdb, movie])
-	# print("Inserting movie", title, "or tt" + str(int(imdb)).zfill(7), "as", movie)
-	print(cur.query)
-	conn.commit()
-#   print(title, imdb, movie)
+		if math.isnan(movie):
+			link = "https://api.themoviedb.org/3/find/tt" + imdb + "?api_key=1cd7d832933a3f8cb0c956ac70964e5f&language=en-US&external_source=imdb_id"
+
+			movie = fetch(link)
+			# print("Requesting", link)
+			print(movie)
+		else:
+			movie = line[2]
+
+		connection.last_query = "INSERT INTO links values (%s,%s,%s) ON CONFLICT (entry_type, entry_id) DO NOTHING;"
+		connection.insert([
+			                  movie,
+			                  title,
+			                  imdb
+		                  ], True, True)
+		print("Inserting movie", title, "or tt" + str(int(imdb)).zfill(7), "as", movie)
+
+
+if __name__ == '__main__':
+	connection = Database()
+	main()
