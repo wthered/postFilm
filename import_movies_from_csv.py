@@ -5,12 +5,14 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
+from credentials import http_headers
+
+
 # conn = psy.connect(host="10.42.0.13", database="aluminium", user="ntina23gr", password="!p9lastiras")
 # cur = conn.cursor()
 
 movie_plan = 1
 movies = pd.read_csv('/tmp/watchlist.csv', header=None, engine='python', delimiter=',')
-mozilla = 'Mozilla/4.0 (compatible; MSIE 5.0; Windows 98;)'
 
 
 def get_duration(duration):
@@ -24,8 +26,10 @@ def get_duration(duration):
 
 
 def get_release_dates():
-	date_link = "https://www.imdb.com/title/" + row[0] + "/releaseinfo"
-	date_page = requests.get(date_link, headers={'User-Agent': mozilla})
+	date_link = "https://www.imdb.com/title/{}/releaseinfo".format(row[0])
+	date_page = requests.get(date_link, headers={
+		'User-Agent': http_headers['User-Agent']
+	})
 	date_soup = BeautifulSoup(date_page.text, 'html.parser')
 	for date_mono in date_soup.find_all('tr', class_='odd'):
 		if 'Greece' in date_mono.text.strip():
@@ -41,14 +45,20 @@ def get_release_dates():
 
 
 for index, row in movies.iterrows():
-	movie_page = "https://www.imdb.com/title/" + row[0]
-	request_headers = {'User-Agent': mozilla}
+	movie_page = "https://www.imdb.com/title/{}".format(row[0])
+	request_headers = {
+		'User-Agent': http_headers['User-Agent']
+	}
 	page = requests.get(movie_page, headers=request_headers)
 	# message = "Title {movie} from year {movie_year}"
 	# print(message.format(movie=row[0], movie_year=row[5]))
 	soup = BeautifulSoup(page.text, 'html.parser')
-	title_box = soup.find('div', attrs={"class": 'originalTitle'})
-	year_box = soup.find('span', attrs={"id": 'titleYear'})
+	title_box = soup.find('div', attrs={
+		"class": 'originalTitle'
+	})
+	year_box = soup.find('span', attrs={
+		"id": 'titleYear'
+	})
 	genres_list = soup.find_all('span', class_="itemprop", itemprop="genre")
 	movie_plot = soup.find('div', class_='summary_text')
 	movie_rating = soup.find('span', class_='rating').text.strip()
