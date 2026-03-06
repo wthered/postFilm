@@ -1,6 +1,6 @@
 from database import Database
-from misc_functions import *
 from movie_functions import *
+from datetime import datetime
 
 
 def process_local():

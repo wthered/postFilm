@@ -1,7 +1,9 @@
 import math
+import sys
 
 from credentials import *
 from misc_functions import *
+
 # Local Imports
 from people_functions import *
 from similarity_functions import *
@@ -266,6 +268,7 @@ def handle_countries(connection, countries, movie_id):
 				founded_country = update_country(connection, country)
 		else:
 			founded_country = create_country(connection, country)
+		print("Founded Country: {}".format(founded_country))
 		handle_countries_movies(connection, founded_country, movie_id)
 
 
@@ -313,9 +316,9 @@ def create_country(connection, country_data):
 	print(remote_country)
 	connection.last_query = "INSERT INTO countries (code, name, iso_code, created_at, updated_at) VALUES (%s, %s, %s, NOW(), NOW())"
 	country_options = [
-		country_data.get('iso_3166_1'),
+		remote_country.get('cca2'),
 		country_data.get('name'),
-		remote_country.get('cca2')
+		country_data.get('iso_3166_1'),
 	]
 	connection.insert(country_options, True, True)
 	return country_data.get('iso_3166_1')
@@ -323,7 +326,8 @@ def create_country(connection, country_data):
 
 def update_country(connection, country_data):
 	# remote_country = fetch_country_info(connection, country_data.get('iso_3166_1'))
-	connection.last_query = "UPDATE countries SET name = %s, updated_at = NOW() WHERE code = %s"
+	print("Update Country: {}".format(country_data))
+	connection.last_query = "UPDATE countries SET name = %s, updated_at = NOW() WHERE iso_code = %s"
 	connection.update([
 		country_data.get('name'),
 		country_data.get('iso_3166_1')
@@ -344,7 +348,7 @@ def handle_countries_movies(connection, country_code, movie_id):
 			"App\\Models\\Movie",
 			movie_id,
 			country_code
-		], False, True)
+		], True, True)
 	else:
 		if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
 			connection.last_query = "UPDATE entries_countries SET updated_at = NOW() WHERE country_code = %s AND entry_type = %s AND entry_id = %s"
@@ -352,7 +356,7 @@ def handle_countries_movies(connection, country_code, movie_id):
 				country_code,
 				"App\\Models\\Movie",
 				movie_id
-			], False, True)
+			], True, True)
 
 
 def handle_languages(connection, languages, entry_type, entry_id):
@@ -570,7 +574,7 @@ def handle_genre_movies(database, genre_name, movie):
 
 
 def process(connection, film_info):
-	if film_info.get('vote_count') < 1024 or film_info.get('vote_average') < 1:
+	if film_info.get('vote_count') < 64 or film_info.get('vote_average') < 0.75:
 		return None
 	film_item = dict({
 		"film": handle_movie(connection, film_info),
@@ -580,12 +584,8 @@ def process(connection, film_info):
 	# print("[Movie Functions:420] {}".format(film_item))
 	# print("[{}@{}] Handling people for `{}`".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, film_info.get('title'), end='{}\r'.format('.' * dots)))
 	handle_people(connection, film_info.get('credits', {
-		'cast': [
-			{}
-		],
-		'crew': [
-			{}
-		]
+		'cast': [{}],
+		'crew': [{}],
 	}), film_item.get('film'))
 	# print("[{}@{}] Handling genres for `{}`".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, film_info.get('title'), end='{}\r'.format('.' * dots)))
 	handle_genres(connection, film_info.get('genres'), film_item.get('film'))
