@@ -89,7 +89,6 @@ class Database:
 				print("[Database:88 - DELETE] {}".format(self.cursor.mogrify(self.last_query, parameters)))
 			if commit:
 				self.conn.commit()
-			print(self.cursor.statusmessage)
 		except psycopg2.Error as e:
 			print("\n\n\nError executing DELETE: {}\n{}".format(e, self.cursor.mogrify(self.last_query, parameters)))
 			self.conn.rollback()

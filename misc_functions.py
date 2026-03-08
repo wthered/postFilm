@@ -121,7 +121,7 @@ def handle_countries(database, countries, film):
 				country_info.get('cca3'),
 				country.get('name'),
 				country.get('iso_3166_1')
-			], False, True)  # print("[{}@{}] Country created: {}\n{}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, country.get('name'), country_info))
+			], False, True)
 		else:
 			if time_zone.localize(database.results.get('updated_at')) > datetime.now(time_zone) - timedelta(days=days):
 				continue

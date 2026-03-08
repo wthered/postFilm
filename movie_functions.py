@@ -120,7 +120,7 @@ def handle_movie(connection, film_info):
 			film_info.get('id'),
 			film_info.get('imdb_id')
 		], False, False)
-	if connection.results is None and film_info.get('vote_count') > 1024:
+	if connection.results is None:
 		return create_movie(connection, film_info)
 	if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
 		return update_movie(connection, film_info, connection.results.get('entry_id'))
@@ -254,22 +254,22 @@ def handle_companies_movies(connection, company_id, movie_id):
 			connection.last_query = "UPDATE companies_movies SET updated_at = NOW() WHERE company_id = %s and movie_id = %s"
 			connection.update(entry_data, False, True)
 
-
-def handle_countries(connection, countries, movie_id):
-	for country in countries:
-		connection.last_query = "SELECT * FROM countries WHERE iso_code = %s"
-		connection.select([
-			country.get('iso_3166_1')
-		], True, False)
-		founded_country = connection.results.get('code') if connection.results is not None else None
-		if connection.results is not None:
-			# Check if the updated_at time is older than 8 days
-			if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
-				founded_country = update_country(connection, country)
-		else:
-			founded_country = create_country(connection, country)
-		print("Founded Country: {}".format(founded_country))
-		handle_countries_movies(connection, founded_country, movie_id)
+# Found a duplicate in Misc Functions File
+# def handle_countries(connection, countries, movie_id):
+# 	for country in countries:
+# 		connection.last_query = "SELECT * FROM countries WHERE iso_code = %s"
+# 		connection.select([
+# 			country.get('iso_3166_1')
+# 		], False, False)
+# 		founded_country = connection.results.get('code') if connection.results is not None else None
+# 		if connection.results is not None:
+# 			# Check if the updated_at time is older than 8 days
+# 			if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
+# 				founded_country = update_country(connection, country)
+# 		else:
+# 			founded_country = create_country(connection, country)
+# 		# print("Founded Country: {}".format(founded_country))
+# 		handle_countries_movies(connection, country.get('iso_3166_1'), movie_id)
 
 
 def fetch_country_info(connection, country_code):
@@ -313,7 +313,7 @@ def fetch_country_info(connection, country_code):
 
 def create_country(connection, country_data):
 	remote_country = fetch_country_info(connection, country_data.get('iso_3166_1'))
-	print(remote_country)
+	# print("[Line 316] Remote Country: {} with 2-letter-code {}".format(remote_country, remote_country.get('cca2')))
 	connection.last_query = "INSERT INTO countries (code, name, iso_code, created_at, updated_at) VALUES (%s, %s, %s, NOW(), NOW())"
 	country_options = [
 		remote_country.get('cca2'),
@@ -325,13 +325,14 @@ def create_country(connection, country_data):
 
 
 def update_country(connection, country_data):
-	# remote_country = fetch_country_info(connection, country_data.get('iso_3166_1'))
-	print("Update Country: {}".format(country_data))
+	remote_country = fetch_country_info(connection, country_data.get('iso_3166_1'))
+	# print("[Line 329] Remote Country: {} with 2-letter-code {}".format(remote_country, remote_country.get('cca2')))
 	connection.last_query = "UPDATE countries SET name = %s, updated_at = NOW() WHERE iso_code = %s"
 	connection.update([
 		country_data.get('name'),
 		country_data.get('iso_3166_1')
 	], False, True)
+	# print("Remote Country is {}".format(remote_country))
 	return country_data.get('iso_3166_1')
 
 
@@ -348,7 +349,7 @@ def handle_countries_movies(connection, country_code, movie_id):
 			"App\\Models\\Movie",
 			movie_id,
 			country_code
-		], True, True)
+		], False, True)
 	else:
 		if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
 			connection.last_query = "UPDATE entries_countries SET updated_at = NOW() WHERE country_code = %s AND entry_type = %s AND entry_id = %s"
@@ -477,7 +478,7 @@ def create_keyword(connection, keyword):
 	connection.insert([
 		keyword_id,
 		keyword.get('name'),
-		None
+		0
 	], False, True)
 	return keyword_id
 
@@ -574,8 +575,8 @@ def handle_genre_movies(database, genre_name, movie):
 
 
 def process(connection, film_info):
-	if film_info.get('vote_count') < 64 or film_info.get('vote_average') < 0.75:
-		return None
+	# if film_info.get('vote_count') < 64 or film_info.get('vote_average') < 0.75:
+	# 	return None
 	film_item = dict({
 		"film": handle_movie(connection, film_info),
 		"page": film_info.get("imdb_id"),
