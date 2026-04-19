@@ -1,6 +1,7 @@
+from datetime import datetime
+
 from database import Database
 from movie_functions import *
-from datetime import datetime
 
 
 def process_local():
@@ -18,7 +19,7 @@ def process_local():
 			db.select([
 				'App\\Models\\Movie',
 				local_entry.item()
-			], True, False)
+			], False, False)
 			if db.results is None:
 				db.last_query = "DELETE FROM movies WHERE id IN (SELECT entry_id FROM links WHERE entry_type = %s AND link = %s)"
 				db.delete([
@@ -30,8 +31,10 @@ def process_local():
 					'App\\Models\\Movie',
 					local_entry.item()
 				], False, True)
-				local_frame.drop(local_entry, inplace=True)
+			local_frame.drop(local_entry, inplace=True)
+			print("[{}@{} - {} / {}] Skipping {}...".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, local_index + 1, local_frame.shape[0], local_entry), end='\r')	
 			continue
+		print("[{}@{} - {} / {}] Requested info of {}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, str(local_index + 1).zfill(len(str(local_frame.shape[0]))), local_frame.shape[0], local_entry))
 		local_item = dict({
 			'film': process(db, local_info),
 			'link': local_info.get('id'),
@@ -44,12 +47,13 @@ def process_local():
 			print("[{}@{}] These movies will be processed\n{}".format(when_frame_ends(start_time, start_size, local_frame), time_zone.zone, local_frame))
 		time.sleep(1)
 	local_frame.to_csv('movie_file.csv', index=True)
-	return None
+	print("Local Frame generated from movie file has {} movies".format(local_frame.shape[0]))
+	return local_frame
 
 
 if __name__ == "__main__":
 	db = Database()
-	process_local()
+	movie_frame = process_local()
 	page = 1
 	max_pages = 496
 	pages = max_pages

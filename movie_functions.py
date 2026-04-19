@@ -3,7 +3,6 @@ import sys
 
 from credentials import *
 from misc_functions import *
-
 # Local Imports
 from people_functions import *
 from similarity_functions import *
@@ -253,6 +252,7 @@ def handle_companies_movies(connection, company_id, movie_id):
 		if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
 			connection.last_query = "UPDATE companies_movies SET updated_at = NOW() WHERE company_id = %s and movie_id = %s"
 			connection.update(entry_data, False, True)
+
 
 # Found a duplicate in Misc Functions File
 # def handle_countries(connection, countries, movie_id):
@@ -575,18 +575,22 @@ def handle_genre_movies(database, genre_name, movie):
 
 
 def process(connection, film_info):
-	# if film_info.get('vote_count') < 64 or film_info.get('vote_average') < 0.75:
-	# 	return None
+	if film_info.get('vote_count') < datetime.now(time_zone).second or film_info.get('vote_average') < 0.75:
+		return None
 	film_item = dict({
 		"film": handle_movie(connection, film_info),
 		"page": film_info.get("imdb_id"),
 		"link": film_info.get('id')
 	})
-	# print("[Movie Functions:420] {}".format(film_item))
+	# print("[Movie Functions:585] {}".format(film_item))
 	# print("[{}@{}] Handling people for `{}`".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, film_info.get('title'), end='{}\r'.format('.' * dots)))
 	handle_people(connection, film_info.get('credits', {
-		'cast': [{}],
-		'crew': [{}],
+		'cast': [
+			{}
+		],
+		'crew': [
+			{}
+		],
 	}), film_item.get('film'))
 	# print("[{}@{}] Handling genres for `{}`".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, film_info.get('title'), end='{}\r'.format('.' * dots)))
 	handle_genres(connection, film_info.get('genres'), film_item.get('film'))
