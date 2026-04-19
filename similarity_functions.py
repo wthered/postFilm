@@ -142,12 +142,12 @@ def get_similar(connection, source_info):
 			source_entry = next((item for item in connection.results if item.get('link') == source_info.get('id')), None)
 			target_entry = next((item for item in connection.results if item.get('link') == target_info.get('id')), None)
 			source_item = dict({
-				'film': source_entry.get('entry_id'),
+				'film': source_entry.get('entry_id') if source_entry is not None else None,
 				'link': source_info.get('id'),
 				'page': source_entry.get('page')
 			})
 			target_item = dict({
-				'film': target_entry.get('entry_id'),
+				'film': target_entry.get('entry_id') if target_entry is not None else None,
 				'link': target_info.get('id'),
 				'page': target_entry.get('page')
 			})

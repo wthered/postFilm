@@ -110,8 +110,8 @@ def process_local():
 			db.last_query = "SELECT entry_id AS film, page, link, m.title, m.score, m.rating, NULL AS votes, m.release_date, m.created_at, l.updated_at FROM public.movies m INNER JOIN links l ON m.id = l.entry_id WHERE l.entry_type = %s AND l.link = %s"
 			db.select([
 				'App\\Models\\Movie',
-				local_entry
-			], True, False)
+				int(local_entry)
+			], False, False)
 			if db.results is None:
 				db.last_query = "DELETE FROM movies WHERE id IN (SELECT entry_id FROM links WHERE entry_type = %s AND link = %s)"
 				db.delete([
