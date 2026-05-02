@@ -1,9 +1,5 @@
-import math
-import sys
-
-from credentials import *
-from misc_functions import *
 # Local Imports
+
 from people_functions import *
 from similarity_functions import *
 
@@ -93,14 +89,37 @@ def find_next_keyword(connection):
 
 
 def get_film_info(link):
-	response = requests.get('https://api.themoviedb.org/3/movie/{}?language=en-US&append_to_response=videos,keywords,credits'.format(link), headers=http_headers).json()
-	if 'success' in response or response.get('adult', False):
+	try:
+		r = requests.get('https://api.themoviedb.org/3/movie/{}?language=en-US&append_to_response=videos,keywords,credits'.format(link), headers=http_headers)
+
+		# 1. ΠΡΩΤΑ ελέγχουμε για Rate Limit
+		if r.status_code == 429:
+			wait_time = int(r.headers.get("Retry-After", 1))
+			print(f"Rate limit hit. Waiting for {wait_time} seconds...")
+			time.sleep(wait_time)
+			return get_film_info(link)
+
+		# 2. ΜΕΤΑ ελέγχουμε αν είναι οτιδήποτε άλλο εκτός από 200
+		if r.status_code != 200:
+			return None
+
+		# 3. Αποκωδικοποίηση
+		response = r.json()
+
+	except (requests.exceptions.RequestException, ValueError):
 		return None
+
+	if not response or 'success' in response or response.get('adult', False):
+		return None
+
+	# tagline fix: σιγουρεύουμε ότι είναι string
+	tagline = str(response.get('tagline') or "")
+
 	response.update({
 		"imdb_id": fix_page(response.get("imdb_id")),
 		"homepage": long_links[link] if link in long_links else response.get('homepage'),
 		"released": fix_date(response.get("release_date"), "%Y-%m-%d"),
-		"tagline": response.get('tagline') if len(response.get('tagline')) < 255 else "{}&hellip;".format(response.get('tagline')[:245]),
+		"tagline": tagline if len(tagline) < 255 else "{}&hellip;".format(tagline[:245]),
 	})
 	return response
 
@@ -252,24 +271,6 @@ def handle_companies_movies(connection, company_id, movie_id):
 		if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
 			connection.last_query = "UPDATE companies_movies SET updated_at = NOW() WHERE company_id = %s and movie_id = %s"
 			connection.update(entry_data, False, True)
-
-
-# Found a duplicate in Misc Functions File
-# def handle_countries(connection, countries, movie_id):
-# 	for country in countries:
-# 		connection.last_query = "SELECT * FROM countries WHERE iso_code = %s"
-# 		connection.select([
-# 			country.get('iso_3166_1')
-# 		], False, False)
-# 		founded_country = connection.results.get('code') if connection.results is not None else None
-# 		if connection.results is not None:
-# 			# Check if the updated_at time is older than 8 days
-# 			if connection.results.get('updated_at').astimezone(time_zone) < datetime.now(time_zone) - timedelta(days=days):
-# 				founded_country = update_country(connection, country)
-# 		else:
-# 			founded_country = create_country(connection, country)
-# 		# print("Founded Country: {}".format(founded_country))
-# 		handle_countries_movies(connection, country.get('iso_3166_1'), movie_id)
 
 
 def fetch_country_info(connection, country_code):
@@ -575,13 +576,37 @@ def handle_genre_movies(database, genre_name, movie):
 
 
 def process(connection, film_info):
-	if film_info.get('vote_count') < datetime.now(time_zone).second or film_info.get('vote_average') < 0.75:
+	# --- ΦΙΛΤΡΑ ΠΟΙΟΤΗΤΑΣ ---
+	popularity = film_info.get('popularity', 0)
+	vote_count = film_info.get('vote_count', 0)
+	runtime = film_info.get('runtime', 0)
+
+	# 1. Καθαρό "Σκουπίδι": Πολύ χαμηλή δημοτικότητα και σχεδόν μηδέν ψήφοι
+	if popularity < 0.6 and vote_count < 5:
 		return None
-	film_item = dict({
-		"film": handle_movie(connection, film_info),
+
+	# 2. Το "Φίλτρο Δευτερολέπτων": Περιορίζει τα requests για ταινίες μέτριας δημοτικότητας
+	if vote_count < (datetime.now(time_zone).second / 2) and popularity < 1.5:
+		return None
+
+	# 3. Clip Filter: Αν είναι κάτω από 20 λεπτά, πιθανόν δεν είναι ταινία
+	# (Εκτός αν σε ενδιαφέρουν τα short films)
+	if runtime and runtime < 20:
+		return None
+
+	# --- ΕΝΑΡΞΗ ΕΠΕΞΕΡΓΑΣΙΑΣ ---
+	# Αν η ταινία πέρασε τα φίλτρα, προχωράμε στη βάση
+	film_id = handle_movie(connection, film_info)
+
+	if not film_id:
+		return None
+
+	film_item = {
+		"film": film_id,
 		"page": film_info.get("imdb_id"),
 		"link": film_info.get('id')
-	})
+	}
+
 	# print("[Movie Functions:585] {}".format(film_item))
 	# print("[{}@{}] Handling people for `{}`".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, film_info.get('title'), end='{}\r'.format('.' * dots)))
 	handle_people(connection, film_info.get('credits', {
@@ -648,97 +673,98 @@ def process(connection, film_info):
 	return film_item.get('film')
 
 
-def get_similar(connection, source_info, movie_frame):
-	# print("\n[{}@{}] Movie Frame:\n{}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, movie_frame))
-	result_frame = movie_frame.copy()
-	try:
-		source_item = dict({
-			'film': movie_frame.at[source_info.get('id'), 'film'].item(),
-			'page': movie_frame.at[source_info.get('id'), 'page'].item(),
-			'link': source_info.get('id')
-		})
-	except AttributeError:
-		source_item = dict({
-			'film': movie_frame.at[source_info.get('id'), 'film'],
-			'page': movie_frame.at[source_info.get('id'), 'page'],
-			'link': source_info.get('id')
-		})
-	page = 1
-	url = "https://api.themoviedb.org/3/movie/{}/similar?language=en-US&page={}".format(source_info.get('id'), page)
-	response = requests.get(url, headers=http_headers).json()
-	# pages = min(16, response.get('total_pages')) #
-	pages = min(math.ceil(datetime.now(time_zone).second / 2) + 3, response.get('total_pages'))
-	start_time = datetime.now(time_zone)
-	start_size = movie_frame.shape[0]
-	while page <= pages:
-		url = "https://api.themoviedb.org/3/movie/{}/similar?language=en-US&page={}".format(source_info.get('id'), page)
-		# print("[Page {} / {}] Requesting {}".format(page, pages, url))
-		response = requests.get(url, headers=http_headers).json()
-		if response.get('total_results') == 0:
-			return movie_frame
-		for result in response.get('results'):
-			frame_size = movie_frame.shape[0]
-			target_info = get_film_info(result.get('id'))
-			if target_info is None:
-				continue
-			if source_item.get('page') is None:
-				connection.last_query = "SELECT * FROM links WHERE entry_type = %s AND link = %s AND page IS NULL"
-				connection.select([
-					'App\\Models\\Movie',
-					result.get('id')
-				], False, False)
-			else:
-				connection.last_query = "SELECT * FROM links WHERE entry_type = %s AND link = %s OR page = %s"
-				connection.select([
-					'App\\Models\\Movie',
-					result.get('id'),
-					target_info.get('imdb_id')
-				], False, False)
-			if connection.results is None:
-				target_item = dict({
-					'film': process(connection, target_info),
-					'page': target_info.get('imdb_id'),
-					'link': target_info.get('id')
-				})
-				recent_entry = True
-			else:
-				target_item = dict({
-					'film': connection.results.get('entry_id'),
-					'page': target_info.get('imdb_id'),
-					'link': target_info.get('id')
-				})
-				print("[{}@{} - Page {} / {}] Skipped {}....".format(when_frame_ends(start_time, start_size, movie_frame), time_zone.zone, str(page).rjust(2, " "), pages, target_item), end='\r')
-				continue
-			similarity = calculate_similarity(connection, source_item, source_info, target_item, target_info)
-			if recent_entry:
-				result_frame.at[target_item.get('link'), 'film'] = target_item.get('film')
-				result_frame.at[target_item.get('link'), 'page'] = target_info.get('imdb_id')
-				result_frame.at[target_item.get('link'), 'title'] = target_info.get('title')
-				result_frame.at[target_item.get('link'), 'rating'] = target_info.get('vote_average')
-				result_frame.at[target_item.get('link'), 'votes'] = target_info.get('vote_count')
-				result_frame.at[target_item.get('link'), 'score'] = target_info.get('popularity')
-				# Remove .date() from pd.to_datetime(target_info.get('released')) to keep the value in datetime64[ns] format
-				result_frame.at[target_item.get('link'), 'released'] = pd.to_datetime(target_info.get('released')) if target_info.get('released') else None
-				result_frame.at[target_item.get('link'), 'similarity'] = similarity
-				result_frame.at[target_item.get('link'), 'updated_at'] = datetime.now(time_zone).strftime(date_format)
-
-			left_rounds = "{} left".format(modulus - result_frame.shape[0] % modulus) if result_frame.shape[0] % modulus > 0 else "{} rounds".format(int(result_frame.shape[0] / modulus))
-			print("[{}@{} - Page {} / {}] Frame has {} movies ({}) after `{}`{}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, str(page).rjust(2, " "), pages, result_frame.shape[0], left_rounds, result.get('title'), '.' * 8),
-				end='\r' if frame_size == result_frame.shape[0] else '\n')
-			if result_frame.shape[0] % modulus == 0 and recent_entry:
-				# movie_frame = movie_frame[['film', 'page', 'title', 'rating', 'votes', 'similarity', 'updated_at']]
-				result_frame.sort_index(inplace=True)
-				print("\n[{}@{}] These movies will be processed\n{}".format(when_frame_ends(start_time, start_size, movie_frame), time_zone.zone, movie_frame))
-				connection.last_query = "DELETE FROM similarities WHERE similarity_score = %s"
-				connection.delete([
-					0
-				], True, True)
-			time.sleep(1)
-		result_frame.sort_index(inplace=True)
-		result_frame.to_csv('movie_file.csv')
-		page += 1
-		time.sleep(1)
-	return result_frame
+# Found duplicate in similarity_function
+# def get_similar(connection, source_info, movie_frame):
+# 	# print("\n[{}@{}] Movie Frame:\n{}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, movie_frame))
+# 	result_frame = movie_frame.copy()
+# 	try:
+# 		source_item = dict({
+# 			'film': movie_frame.at[source_info.get('id'), 'film'].item(),
+# 			'page': movie_frame.at[source_info.get('id'), 'page'].item(),
+# 			'link': source_info.get('id')
+# 		})
+# 	except AttributeError:
+# 		source_item = dict({
+# 			'film': movie_frame.at[source_info.get('id'), 'film'],
+# 			'page': movie_frame.at[source_info.get('id'), 'page'],
+# 			'link': source_info.get('id')
+# 		})
+# 	page = 1
+# 	url = "https://api.themoviedb.org/3/movie/{}/similar?language=en-US&page={}".format(source_info.get('id'), page)
+# 	response = requests.get(url, headers=http_headers).json()
+# 	# pages = min(16, response.get('total_pages')) #
+# 	pages = min(math.ceil(datetime.now(time_zone).second / 2) + 3, response.get('total_pages'))
+# 	start_time = datetime.now(time_zone)
+# 	start_size = movie_frame.shape[0]
+# 	while page <= pages:
+# 		url = "https://api.themoviedb.org/3/movie/{}/similar?language=en-US&page={}".format(source_info.get('id'), page)
+# 		# print("[Page {} / {}] Requesting {}".format(page, pages, url))
+# 		response = requests.get(url, headers=http_headers).json()
+# 		if response.get('total_results') == 0:
+# 			return movie_frame
+# 		for result in response.get('results'):
+# 			frame_size = movie_frame.shape[0]
+# 			target_info = get_film_info(result.get('id'))
+# 			if target_info is None:
+# 				continue
+# 			if source_item.get('page') is None:
+# 				connection.last_query = "SELECT * FROM links WHERE entry_type = %s AND link = %s AND page IS NULL"
+# 				connection.select([
+# 					'App\\Models\\Movie',
+# 					result.get('id')
+# 				], False, False)
+# 			else:
+# 				connection.last_query = "SELECT * FROM links WHERE entry_type = %s AND link = %s OR page = %s"
+# 				connection.select([
+# 					'App\\Models\\Movie',
+# 					result.get('id'),
+# 					target_info.get('imdb_id')
+# 				], False, False)
+# 			if connection.results is None:
+# 				target_item = dict({
+# 					'film': process(connection, target_info),
+# 					'page': target_info.get('imdb_id'),
+# 					'link': target_info.get('id')
+# 				})
+# 				recent_entry = True
+# 			else:
+# 				target_item = dict({
+# 					'film': connection.results.get('entry_id'),
+# 					'page': target_info.get('imdb_id'),
+# 					'link': target_info.get('id')
+# 				})
+# 				print("[{}@{} - Page {} / {}] Skipped {}....".format(when_frame_ends(start_time, start_size, movie_frame), time_zone.zone, str(page).rjust(2, " "), pages, target_item), end='\r')
+# 				continue
+# 			similarity = calculate_similarity(connection, source_item, source_info, target_item, target_info)
+# 			if recent_entry:
+# 				result_frame.at[target_item.get('link'), 'film'] = target_item.get('film')
+# 				result_frame.at[target_item.get('link'), 'page'] = target_info.get('imdb_id')
+# 				result_frame.at[target_item.get('link'), 'title'] = target_info.get('title')
+# 				result_frame.at[target_item.get('link'), 'rating'] = target_info.get('vote_average')
+# 				result_frame.at[target_item.get('link'), 'votes'] = target_info.get('vote_count')
+# 				result_frame.at[target_item.get('link'), 'score'] = target_info.get('popularity')
+# 				# Remove .date() from pd.to_datetime(target_info.get('released')) to keep the value in datetime64[ns] format
+# 				result_frame.at[target_item.get('link'), 'released'] = pd.to_datetime(target_info.get('released')) if target_info.get('released') else None
+# 				result_frame.at[target_item.get('link'), 'similarity'] = similarity
+# 				result_frame.at[target_item.get('link'), 'updated_at'] = datetime.now(time_zone).strftime(date_format)
+#
+# 			left_rounds = "{} left".format(modulus - result_frame.shape[0] % modulus) if result_frame.shape[0] % modulus > 0 else "{} rounds".format(int(result_frame.shape[0] / modulus))
+# 			print("[{}@{} - Page {} / {}] Frame has {} movies ({}) after `{}`{}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, str(page).rjust(2, " "), pages, result_frame.shape[0], left_rounds, result.get('title'), '.' * 8),
+# 				end='\r' if frame_size == result_frame.shape[0] else '\n')
+# 			if result_frame.shape[0] % modulus == 0 and recent_entry:
+# 				# movie_frame = movie_frame[['film', 'page', 'title', 'rating', 'votes', 'similarity', 'updated_at']]
+# 				result_frame.sort_index(inplace=True)
+# 				print("\n[{}@{}] These movies will be processed\n{}".format(when_frame_ends(start_time, start_size, movie_frame), time_zone.zone, movie_frame))
+# 				connection.last_query = "DELETE FROM similarities WHERE similarity_score = %s"
+# 				connection.delete([
+# 					0
+# 				], True, True)
+# 			time.sleep(1)
+# 		result_frame.sort_index(inplace=True)
+# 		result_frame.to_csv('movie_file.csv')
+# 		page += 1
+# 		time.sleep(1)
+# 	return result_frame
 
 
 def get_filmography(connection, film_person, entry_type, data_frame):

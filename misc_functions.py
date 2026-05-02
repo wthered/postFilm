@@ -1,7 +1,7 @@
 # Description: This file contains the functions that are used in the main file to handle the data from the API.
 import requests
-from movie_functions import *
 import time
+from credentials import *
 
 
 def fix_page(page):

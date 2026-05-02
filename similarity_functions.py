@@ -29,8 +29,7 @@ def calculate_similarity(connection, item_one, info_one, item_two, info_two):
 		print("Vector Two: {}".format(vector_two))
 		print("Normal Two: {}".format(np.linalg.norm(vector_two)))
 		return None
-	handle_similarity(connection, item_one.get('film'), item_two.get('film'), similarity.item())
-	return similarity.item()
+	return handle_similarity(connection, item_one.get('film'), item_two.get('film'), similarity.item())
 
 
 def handle_similarity(connection, movie_one, movie_two, similarity):
@@ -57,6 +56,7 @@ def handle_similarity(connection, movie_one, movie_two, similarity):
 				movie_one,
 				movie_two
 			], False, True)
+	return similarity
 
 
 def normalise_vectors(original_one, list_one, original_two, list_two):
@@ -87,6 +87,7 @@ def get_similar(connection, source_info):
 		'created_at',
 		'updated_at'
 	]).set_index('link')
+
 	# print("\n[{}@{}] Movie Frame:\n{}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, movie_frame))
 	page = 1
 	url = "https://api.themoviedb.org/3/movie/{}/similar?language=en-US&page={}".format(source_info.get('id'), page)
@@ -126,7 +127,10 @@ def get_similar(connection, source_info):
 			for person in target_credits.get('cast'):
 				person_films = get_person_films(connection, person.get('id'))
 				if not person_films.empty:
-					movie_frame = pd.concat([movie_frame.copy(), person_films])
+					movie_frame = pd.concat([
+						movie_frame.copy(),
+						person_films
+					])
 				print("[{}@{} - {}] Just added filmography of {}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, person.get('original_name'), person.get('name')), end='{}\r'.format('.' * 8))
 
 			left_rounds = "{} left".format(modulus - movie_frame.shape[0] % modulus) if movie_frame.shape[0] % modulus > 0 else "{} rounds".format(int(movie_frame.shape[0] / modulus))
@@ -139,19 +143,51 @@ def get_similar(connection, source_info):
 				target_info.get('id'),
 				'App\\Models\\Movie'
 			], False, True)
-			source_entry = next((item for item in connection.results if item.get('link') == source_info.get('id')), None)
-			target_entry = next((item for item in connection.results if item.get('link') == target_info.get('id')), None)
+
+			# Αναζήτηση source_entry
+			source_entry = None
+			target_entry = None
+
+			if connection.results and isinstance(connection.results, list):
+				for item in connection.results:
+					if isinstance(item, dict):
+						if item.get('link') == source_info.get('id'):
+							source_entry = item
+						if item.get('link') == target_info.get('id'):
+							target_entry = item
+			else:
+				print("⚠️ connection.results is not a list or is empty:", type(connection.results))
+
+			# Αν δεν βρέθηκαν, δημιούργησε dummy entries (προαιρετικά)
+			if source_entry is None:
+				print(f"⚠️ Source not found in results. Creating dummy entry for link {source_info.get('id')}")
+				source_entry = {
+					'entry_id': None,
+					'page': None
+				}
+
+			if target_entry is None:
+				print(f"⚠️ Target not found in results. Creating dummy entry for link {target_info.get('id')}")
+				target_entry = {
+					'entry_id': None,
+					'page': None
+				}
+
 			source_item = dict({
 				'film': source_entry.get('entry_id') if source_entry is not None else None,
 				'link': source_info.get('id'),
-				'page': source_entry.get('page')
+				'page': source_entry.get('page') if source_entry is not None else None,
 			})
+
 			target_item = dict({
 				'film': target_entry.get('entry_id') if target_entry is not None else None,
 				'link': target_info.get('id'),
-				'page': target_entry.get('page')
+				'page': target_entry.get('page') if target_entry is not None else None,
 			})
+
 			score = calculate_similarity(connection, item_one=source_item, item_two=target_item, info_one=source_info, info_two=target_info)
+			if source_item.get('film') is None or target_item.get('film') is None:
+				continue
 			connection.last_query = "INSERT INTO similarities (entry_one, entry_two, entry_type, similarity_score, created_at, updated_at) VALUES (%s, %s, 'App\\Models\\Movie', %s, now(), now()) ON CONFLICT ON CONSTRAINT movie_similarities_entries_unique DO UPDATE SET similarity_score = %s, updated_at = now()"
 			connection.insert([
 				source_item.get('film'),

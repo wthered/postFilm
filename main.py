@@ -1,11 +1,20 @@
-from datetime import datetime
-
 from database import Database
 from movie_functions import *
 
 
 def process_local():
-	local_frame = pd.read_csv('movie_file.csv').set_index('link')
+	local_frame = pd.read_csv('movie_file.csv', dtype={
+		'link': int,
+		'film': float,          # Float γιατί έχει .0 και ίσως κενά
+		'page': float,          # Float γιατί έχει .0 και ίσως κενά
+		'title': str,
+		'score': float,
+		'rating': float,
+		'votes': float,
+		'release_date': str,    # Η στήλη 7: την ορίζουμε str για να μην μπερδεύεται με τα κενά
+		'created_at': str,
+		'updated_at': str
+	}).set_index('link')
 	start_time = datetime.now(time_zone)
 	start_size = local_frame.shape[0]
 	if local_frame.empty:
@@ -32,9 +41,9 @@ def process_local():
 					local_entry.item()
 				], False, True)
 			local_frame.drop(local_entry, inplace=True)
-			print("[{}@{} - {} / {}] Skipping {}...".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, local_index + 1, local_frame.shape[0], local_entry), end='\r')	
+			print("[{}@{} - {} / {}] Skipping {}...".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, local_index + 1, local_frame.shape[0], local_entry), end='\r')
 			continue
-		print("[{}@{} - {} / {}] Requested info of {}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, str(local_index + 1).zfill(len(str(local_frame.shape[0]))), local_frame.shape[0], local_entry))
+#		print("[{}@{} - {} / {}] Requested info of {}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, str(local_index + 1).zfill(len(str(local_frame.shape[0]))), local_frame.shape[0], local_entry))
 		local_item = dict({
 			'film': process(db, local_info),
 			'link': local_info.get('id'),
@@ -71,7 +80,7 @@ if __name__ == "__main__":
 		url = available[datetime.now(time_zone).day % len(available)].format(page)
 		print("[{}@{} - Page {} / {}] Requesting {}".format(datetime.now(time_zone).strftime(date_format), time_zone.zone, str(page).rjust(len(str(pages)), '_'), pages, url))
 		response = requests.get(url, headers=http_headers).json()
-		pages = min(max_pages, response.get('total_pages'))
+		pages = min(max_pages, response.get('total_pages') if not None else 496)
 		for result in response.get('results'):
 			db.last_query = "SELECT * FROM links WHERE link = %s"
 			db.select([
